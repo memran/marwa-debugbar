@@ -41,7 +41,7 @@ $mw_debugbar->plugins()->register(new HeuristicsPlugin(), true);
 // history
 $mw_debugbar->setHistory(
     new FileStorage(__DIR__ . '/../runtime/debugbar'),
-    new HistoryConfig(enabled: true, maxSnapshots: 300, uiListLimit: 30)
+    new HistoryConfig(enabled: true, maxSnapshots: 300, uiListLimit: 10)
 );
 
 // Simulated actions
