@@ -79,7 +79,9 @@ final class Renderer
 #mwdbg-root { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483000; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; color: var(--mw-text); }
 #mwdbg-root * { box-sizing: border-box; }
 /*.mw-cloak { display: none !important; }*/
-
+.mw-cloak {
+  display: none !important;
+}
 /* Header bar */
 .mw-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--mw-bg-2); border-top: 1px solid var(--mw-border); box-shadow: var(--mw-shadow); }
 .mw-badge { font-size: 12px; background: var(--mw-pill); border: 1px solid var(--mw-border); border-radius: 9999px; padding: 2px 10px; color: var(--mw-text); }
@@ -187,7 +189,7 @@ final class Renderer
   // State (restore)
   const KEY = 'mwDebugBar';
   let state = { open: false, active: 'timeline' };
-  btnToggle.addEventListener("click",()=> console.log('button Clicked'));
+  //btnToggle.addEventListener("click",()=> console.log('button Clicked'));
 
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');

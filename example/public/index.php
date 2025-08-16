@@ -15,8 +15,3 @@ echo "<h1>Marwa DebugBar Demo</h1>";
 echo  $renderer->render();
 echo "</body></html>";
 
-
-ob_start();
-echo $renderer->render();
-file_put_contents('/tmp/debugbar_output.html', ob_get_contents());
-ob_end_flush();
