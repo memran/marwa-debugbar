@@ -45,7 +45,7 @@ final class Renderer
         // Tabs
         $tabs = [
             'timeline' => ['title' => '⏱ Timeline',   'html' => $this->renderTimeline($p)],
-            //'dumper'   => ['title' => '🧪 VarDumper',  'html' => $this->renderVarDumper($p), 'scroll' => true],
+            'dumper'   => ['title' => '🧪 Dumper',  'html' => $this->renderVarDumper($p), 'scroll' => true],
             'logs'     => ['title' => '📝 Logs',       'html' => $this->renderLogs($p)],
             'queries'  => ['title' => '🗄 Queries',    'html' => $this->renderQueries($p)],
             'memory'   => ['title' => '💾 Memory',     'html' => $this->renderMemory($p)],
@@ -270,27 +270,24 @@ HTML;
     private function renderVarDumper(array $p): string
     {
         $dumps = $p['dumps'] ?? [];
-        if (!$dumps) return '<div class="mw-text-dim">No VarDumper output.</div>';
-
-        $out = '';
-        foreach ($dumps as $i => $dp) {
-            $title = $this->e((string)($dp['name'] ?? ('Dump #' . ($i + 1))));
-            $meta  = [];
-            if (isset($dp['time'])) $meta[] = $this->e((string)$dp['time']).' ms';
-            if (!empty($dp['file'])) $meta[] = $this->e((string)$dp['file']).(!empty($dp['line'])?':'.$this->e((string)$dp['line']):'');
-            $metaHtml = $meta ? '<span style="margin-left:6px;color:#9ca3af;font-size:12px">(' . $this->e(implode(' · ', $meta)) . ')</span>' : '';
-
-            $html = (string)($dp['html'] ?? '');
-            $safe = preg_replace('/<\s*\/?\s*script\b[^>]*>/i', '', $html) ?? '';
-
-            $out .= <<<HTML
-<div class="mw-card" style="margin-bottom:10px">
-  <div class="mw-card-h">{$title}{$metaHtml}</div>
-  <div class="mw-card-b" style="background:#0a0f1d; overflow:auto">{$safe}</div>
-</div>
-HTML;
+        if (empty($dumps)) {
+            return '<div class="mw-text-dim">No dumps collected</div>';
         }
-        return $out;
+
+        $html = '';
+        foreach ($dumps as $i => $dump) {
+            $title = htmlspecialchars($dump['name'] ?? 'Dump #'.($i + 1));
+            $time = isset($dump['time']) ? round($dump['time'] * 1000, 2).' ms' : '';
+            
+            $html .= <<<HTML
+    <div class="mw-card" style="margin-bottom: 15px;">
+        <div class="mw-card-h">{$title} <small style="color: #999;">{$time}</small></div>
+        <div class="mw-card-b">{$dump['html']}</div>
+    </div>
+    HTML;
+        }
+
+        return $html;
     }
 
     private function renderTimeline(array $p): string
