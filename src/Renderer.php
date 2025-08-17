@@ -31,6 +31,7 @@ final class Renderer
 
         // KPI row
         $m = $p['request_metrics'] ?? [];
+        
         $kpis = $this->kpiRow([
             ['Route',         (string)($m['route'] ?? '-')],
             ['Status',        (string)($m['status'] ?? '-')],
@@ -301,6 +302,7 @@ HTML;
                 $end = (float)($s['start_ms'] ?? 0) + (float)($s['duration_ms'] ?? 0);
                 if ($end > $total) $total = $end;
             }
+            
             $summary = $this->timelineSummary(count($spans), $total);
 
             $rows = '';
@@ -317,15 +319,23 @@ HTML;
         }
 
         if (is_array($marks) && $marks) {
-            $summary = $this->timelineSummary(count($marks), null);
+            
+            //$summary = $this->timelineSummary(count($marks), null);
             $rows = '';
+            $total=0;
             foreach ($marks as $m) {
                 $rows .= $this->tr([
                     $this->e((string)($m['label'] ?? '')),
                     $this->num((float)($m['t'] ?? 0), 5).' s',
+                    //$this->formatMillisecondsToDateTime($m['t'])
                 ], [null,'right']);
+                
             }
-            return $summary . $this->table(['Label','Seconds'], $rows, ['left','right']);
+            $first = reset($marks); // Moves pointer to the first element and returns it
+            $last = end($marks);
+            $total = $last['t']-$first['t'];
+            $summary = $this->timelineSummary(count($marks), $total);
+            return $summary . $this->table(['Label','Time'], $rows, ['left','right']);
         }
 
         return '<div style="color:#9ca3af">No timeline data.</div>';
@@ -573,6 +583,7 @@ HTML;
 
     private function num(float $n, int $dec = 2): string
     {
+        //return $this->millisecondsToDate($n);
         return number_format($n, $dec, '.', '');
     }
 
@@ -584,5 +595,16 @@ HTML;
     private function jsKey(string $s): string
     {
         return preg_replace('/[^a-zA-Z0-9_\-]/', '_', $s) ?: 'tab';
+    }
+ 
+   private function formatMillisecondsToDateTime($milliseconds) :string {
+       // Convert milliseconds to seconds
+        $seconds = $milliseconds / 1000;
+
+        // Create a DateTime object from the Unix timestamp (seconds)
+        $dateTime = new \DateTime("@" . floor($seconds));
+
+        // Format the DateTime object
+        return $dateTime->format('H:i:s');
     }
 }

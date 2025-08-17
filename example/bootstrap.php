@@ -49,6 +49,7 @@ $mw_debugbar->mark('bootstrap_done');
 $mw_debugbar->log('info', 'DebugBar initialized');
 $metrics->incLog('info');
 
+
 // Simulate query
 $start = microtime(true);
 usleep(4000);

@@ -1,14 +1,13 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Marwa\DebugBar;
 
-use Marwa\DebugBar\Contracts\Collector;
 use Marwa\DebugBar\Config\HistoryConfig;
+use Marwa\DebugBar\Contracts\Collector;
 use Marwa\DebugBar\Contracts\Storage;
-use Psr\Log\LoggerInterface;
 use Marwa\DebugBar\Profiling\Span;
+use Psr\Log\LoggerInterface;
 
 final class DebugBar
 {
@@ -25,8 +24,9 @@ final class DebugBar
 
     private PluginManager $plugins;
     private ?HistoryManager $history = null;
-    // props
-    private array $spans = [];           // completed spans
+
+    /** Spans (visual timeline) */
+    private array $spans = [];           // completed spans + open placeholders
     private array $openSpanStack = [];   // stack of open span IDs
     private int $spanSeq = 0;
 
@@ -38,23 +38,10 @@ final class DebugBar
         $this->mark('request_start');
     }
 
-    public function enable(): void
-    {
-        $this->enabled = true;
-    }
-    public function disable(): void
-    {
-        $this->enabled = false;
-    }
-    public function isEnabled(): bool
-    {
-        return $this->enabled;
-    }
-
-    public function setLogger(LoggerInterface $logger): void
-    {
-        $this->logger = $logger;
-    }
+    public function enable(): void { $this->enabled = true; }
+    public function disable(): void { $this->enabled = false; }
+    public function isEnabled(): bool { return $this->enabled; }
+    public function setLogger(LoggerInterface $logger): void { $this->logger = $logger; }
 
     public function addCollector(Collector $collector): self
     {
@@ -91,103 +78,120 @@ final class DebugBar
         if (!$this->enabled) return;
         if (count($this->dumps) >= $this->maxDumps) array_shift($this->dumps);
         $this->dumps[] = [
-            'name' => $name,
-            'file' => $file,
-            'line' => $line,
-            'html' => $html,
+            'name' => $name, 'file' => $file, 'line' => $line, 'html' => $html,
             'time' => round((microtime(true) - $this->start) * 1000, 2),
         ];
     }
 
-    public function setVarDumperMaxDumps(int $max): void
-    {
-        $this->maxDumps = $max;
-    }
+    public function setVarDumperMaxDumps(int $max): void { $this->maxDumps = $max; }
 
-    public function plugins(): PluginManager
-    {
-        return $this->plugins;
-    }
+    public function plugins(): PluginManager { return $this->plugins; }
 
     public function setHistory(Storage $storage, ?HistoryConfig $config = null): void
     {
         $cfg = $config ?? new HistoryConfig(enabled: true);
         $this->history = new HistoryManager($storage, $cfg);
     }
-    public function history(): ?HistoryManager
+    public function history(): ?HistoryManager { return $this->history; }
+
+    /* =========================
+     * Spans API (visual timeline)
+     * ========================= */
+    /** Begin a nested span. Returns span id. */
+    public function spanBegin(string $label, array $meta = []): int
     {
-        return $this->history;
+        if (!$this->enabled) return -1;
+        $id = ++$this->spanSeq;
+        $depth = count($this->openSpanStack);
+        $span = new Span($id, $label, microtime(true), $depth, $meta);
+        $this->openSpanStack[] = $id;
+        $this->spans["open:$id"] = $span;
+        return $id;
+    }
+
+    /** End a previously started span. */
+    public function spanEnd(int $id): void
+    {
+        if (!$this->enabled) return;
+        $key = "open:$id";
+        if (!isset($this->spans[$key])) return;
+        /** @var Span $span */
+        $span = $this->spans[$key];
+        $span->close(microtime(true));
+        $idx = array_search($id, $this->openSpanStack, true);
+        if ($idx !== false) array_splice($this->openSpanStack, $idx, 1);
+        unset($this->spans[$key]);
+        $this->spans[] = $span;
+    }
+
+    /** Measure a callable while recording a span. */
+    public function measure(callable $fn, string $label, array $meta = []): mixed
+    {
+        $sid = $this->spanBegin($label, $meta);
+        try {
+            return $fn();
+        } finally {
+            if ($sid > 0) $this->spanEnd($sid);
+        }
     }
 
     public function payload(): array
     {
         if (!$this->enabled) return [];
 
+        // Safety: close orphan spans at payload time
+        if (!empty($this->openSpanStack)) {
+            foreach ($this->openSpanStack as $sid) {
+                $key = "open:$sid";
+                if (isset($this->spans[$key]) && $this->spans[$key] instanceof Span) {
+                    $this->spans[$key]->close(microtime(true));
+                    $this->spans[] = $this->spans[$key];
+                    unset($this->spans[$key]);
+                }
+            }
+            $this->openSpanStack = [];
+        }
+
         $data = [
             '_meta' => [
                 'generated_at' => date('c'),
-                'elapsed_ms' => round((microtime(true) - $this->start) * 1000, 2),
-                'php_sapi' => PHP_SAPI
+                'elapsed_ms'   => round((microtime(true) - $this->start) * 1000, 2),
+                'php_sapi'     => PHP_SAPI
             ],
             'timeline' => $this->marks,
-            'logs' => $this->logs,
-            'queries' => $this->queries,
-            'dumps' => $this->dumps,
+            'logs'     => $this->logs,
+            'queries'  => $this->queries,
+            'dumps'    => $this->dumps,
         ];
 
+        // Collectors
         foreach ($this->collectors as $name => $collector) {
             $data[$name] = $collector->collect();
         }
 
+        // Convert spans to array for JSON
+        $startAbs = $this->start;
+        $spanArr = [];
+        foreach ($this->spans as $s) {
+            if (!$s instanceof Span) continue;
+            $spanArr[] = [
+                'label'       => $s->label,
+                'start_ms'    => round(($s->start - $startAbs) * 1000, 2),
+                'duration_ms' => $s->durationMs ?? 0.0,
+                'depth'       => $s->depth,
+                'meta'        => $s->meta,
+            ];
+        }
+        $data['timeline_spans'] = $spanArr;
+
+        // Plugins
         $data = $this->plugins->extendPayload($data);
 
+        // History metadata
         if ($this->history?->isEnabled()) {
             $data['_history_meta'] = $this->history->recentMeta();
         }
 
         return $data;
-    }
-
-    /**
-     * Start a nested span for flame-style timeline.
-     * @return int span id
-     */
-    public function spanBegin(string $label, array $meta = []): int
-    {
-        if (!$this->enabled) return -1;
-        $id = ++$this->spanSeq;
-        $depth = \count($this->openSpanStack);
-        $span = new Span($id, $label, \microtime(true), $depth, $meta);
-        $this->openSpanStack[] = $id;
-        // store temporarily in $spans with key "open:$id"
-        $this->spans["open:$id"] = $span;
-        return $id;
-    }
-
-    /** End a span created with spanBegin(). */
-    public function spanEnd(int $id): void
-    {
-        if (!$this->enabled) return;
-        $key = "open:$id";
-        if (!isset($this->spans[$key])) return;
-        $span = $this->spans[$key];
-        $span->close(\microtime(true));
-        // remove id from top (best effort)
-        $idx = \array_search($id, $this->openSpanStack, true);
-        if ($idx !== false) \array_splice($this->openSpanStack, $idx, 1);
-        // move to final list (numeric)
-        unset($this->spans[$key]);
-        $this->spans[] = $span;
-    }
-
-    /** Sugar: measure a callable while creating a span. */
-    public function measure(callable $fn, string $label, array $meta = []): mixed
-    {
-        $id = $this->spanBegin($label, $meta);
-        try {
-            return $fn();
-        } finally {
-            if ($id > 0) $this->spanEnd($id);
-        }
     }
 }
