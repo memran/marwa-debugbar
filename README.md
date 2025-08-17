@@ -7,7 +7,7 @@
 
 A modern, lightweight debug bar for PHP applications with Symfony VarDumper integration.
 
-![Marwa DebugBar Screenshot](https://user-images.githubusercontent.com/.../screenshot.png)
+[![Marwa Debugbar Screenshot](https://i.postimg.cc/rpdf9XYR/Screenshot-2025-08-16-at-7-42-26-PM.jpg)](https://postimg.cc/McS0W4wz)
 
 ## Features
 
