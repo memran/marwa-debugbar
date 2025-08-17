@@ -57,6 +57,7 @@ $dur = (microtime(true) - $start) * 1000;
 $mw_debugbar->addQuery('SELECT * FROM users WHERE id=?', [101], $dur, 'mysql');
 $metrics->incQuery($dur);
 
+db_dump('SELECT * FROM password WHERE id=?', "test");
 // Simulate cache
 $cachePlugin->log('GET', 'user:101', false, null);
 $cachePlugin->log('SET', 'user:101', null, ['id' => 101, 'name' => 'Emran']);
@@ -65,5 +66,5 @@ $cachePlugin->log('GET', 'user:101', true, ['id' => 101, 'name' => 'Emran']);
 // End metrics (in middleware in real apps)
 $metrics->setRoute('/demo');
 $metrics->setStatus(200);
-$metrics->setResponseBytes(null);
+$metrics->setResponseBytes(1024);
 $metrics->finish();
