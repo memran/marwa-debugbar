@@ -8,6 +8,7 @@ use Marwa\DebugBar\Contracts\Collector;
 
 final class RequestCollector implements Collector
 {
+    use CollectorsTrait;
     public function name(): string
     {
         return 'request';
@@ -37,5 +38,33 @@ final class RequestCollector implements Collector
             }
         }
         return $headers;
+    }
+   private function renderHTML(array $p): string
+    {
+        $content = $this->renderRequestTable($p);
+        return '<div style="max-height:45vh; overflow:auto">'.$content.'</div>';
+    }
+
+    private function renderRequestTable(array $p): string
+    {
+        $r = $p['request'] ?? [];
+        $rows = [
+            ['Method', $this->e((string)($r['method'] ?? ''))],
+            ['URI',    '<span class="mw-mono">'.$this->e((string)($r['uri'] ?? '')).'</span>'],
+            ['IP',     $this->e((string)($r['ip'] ?? ''))],
+            ['User Agent', '<span class="mw-mono">'.$this->e((string)($r['ua'] ?? '')).'</span>'],
+            ['Headers', $this->preJson($r['headers'] ?? [])],
+            ['GET',     $this->preJson($r['get'] ?? [])],
+            ['POST',    $this->preJson($r['post'] ?? [])],
+            ['Cookies', $this->preJson($r['cookies'] ?? [])],
+            ['Files',   $this->preJson($r['files'] ?? [])],
+            ['Server',  $this->preJson($r['server'] ?? [])],
+        ];
+
+        $trs = '';
+        foreach ($rows as [$k,$v]) {
+            $trs .= '<tr><th style="width:120px;color:#9ca3af;text-align:left;padding:8px;border-bottom:1px solid var(--mw-border)">'.$this->e($k).'</th><td style="padding:8px;border-bottom:1px solid var(--mw-border)">'.$v.'</td></tr>';
+        }
+        return '<table class="mw-table" style="border:0"><tbody>'.$trs.'</tbody></table>';
     }
 }

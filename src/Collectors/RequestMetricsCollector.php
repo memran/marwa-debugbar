@@ -75,4 +75,9 @@ final class RequestMetricsCollector implements Collector
             'queries_time_ms' => round($this->queryTimeMs, 2),
         ];
     }
+
+     public function renderHTML():string
+    {
+        return '';
+    }
 }
