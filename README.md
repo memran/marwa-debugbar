@@ -18,8 +18,6 @@ A modern, lightweight debug bar for PHP applications with Symfony VarDumper inte
 - 📝 Log viewer
 - 💾 Memory usage monitoring
 - 🌐 Request/Response inspector
-- 🔍 Environment variable explorer
-- 🕘 History snapshot system
 - 🎨 Dark/Light theme support
 
 ## Installation
