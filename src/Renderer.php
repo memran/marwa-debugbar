@@ -3,70 +3,57 @@ declare(strict_types=1);
 
 namespace Marwa\DebugBar;
 
-use Marwa\DebugBar\Collectors\CollectorsTrait;
+use Marwa\DebugBar\Collectors\HtmlKit;
 
 final class Renderer
 {
-    use CollectorsTrait;
+    use HtmlKit;
     public function __construct(private DebugBar $debugBar) {}
 
     public function render(): string
     {
+        if (!$this->debugBar->isEnabled()) return '';
 
-        $p = $this->debugBar->payload();
-        if (!$p || !is_array($p)) {
+        $metaData=['_meta' => [
+                'generated_at' => date('c'),
+                'elapsed_ms'   => round((microtime(true) - $this->debugBar->start) * 1000, 2),
+                'php_sapi'     => PHP_SAPI
+            ]];
+        $state = $this->debugBar->state();
+        $rows  = $this->debugBar->collectors()->renderAll($state);
+
+        if (!$rows || !is_array($rows)) {
             return '<div style="padding:10px;color:red">DebugBar: No payload data</div>';
         }
-
-       
-        // Optional history snapshot
-        if (($h = $this->debugBar->history()) && $h->isEnabled()) {
-            $id = $h->persist($p);
-            $p['_history_meta']    = $h->recentMeta();
-            $p['_history_current'] = $id;
-        }
-
-        // Header pills
-        $elapsed = $this->e((string)($p['_meta']['elapsed_ms'] ?? '-'));
-        $memNow  = $this->e((string)($p['memory']['usage_mb'] ?? '-'));
-        $phpVer  = $this->e((string)($p['php']['version'] ?? PHP_VERSION));
-
-        // KPI row
-        $m = $p['request_metrics'] ?? [];
         
-        $kpis = $this->kpiRow([
-            ['Route',         (string)($m['route'] ?? '-')],
-            ['Status',        (string)($m['status'] ?? '-')],
-            ['Duration',      isset($m['duration_ms']) ? $m['duration_ms'].' ms' : '-'],
-            ['SQL',           ($m['queries'] ?? 0).' in '.($m['queries_time_ms'] ?? 0).' ms'],
-            ['PeakMem',       ($p['memory']['peak_usage_mb'] ?? 0).' MB'],
-            ['Resp',          isset($m['response_bytes']) ? (string)(int)round($m['response_bytes']/1024).' KB' : '-'],
-            ['Logs',          (string)($m['logs'] ?? 0)],
-            ['Dumps',         (string)($m['dumps'] ?? 0)],
-        ]);
-
-        // Tabs
-        $tabs = [
-            'timeline' => ['title' => '⏱ Timeline',   'html' => $this->renderTimeline($p)],
-            'dumper'   => ['title' => '🧪 Dumper',  'html' => $this->renderVarDumper($p), 'scroll' => true],
-            'logs'     => ['title' => '📝 Logs',       'html' => $this->renderLogs($p)],
-            'queries'  => ['title' => '🗄 Queries',    'html' => $this->renderQueries($p)],
-            'memory'   => ['title' => '💾 Memory',     'html' => $this->renderMemory($p)],
-            'php'      => ['title' => '🐘 PHP',        'html' => $this->renderPhp($p)],
-            'request'  => ['title' => '🌐 Request',    'html' => $this->renderRequest($p),   'scroll' => true],
-            'session'  => ['title' => '🔐 Session',    'html' => $this->renderSession($p),   'scroll' => true],
-            'env'      => ['title' => '⚙️ Env & Server','html' => $this->renderEnvServer($p),'scroll' => true],
-            'history'  => ['title' => '🕘 History',    'html' => $this->renderHistory($p),   'scroll' => true],
-        ];
-
+        // Header pills
+        $elapsed = $this->e((string)($metaData['_meta']['elapsed_ms'] ?? '-'));
+        $phpVer  = $this->e((string)($rows['php']['version'] ?? PHP_VERSION));
+        
+        $tabs = [];
+        foreach($rows as $data) {
+          if($data['key']==='memory')
+          {
+              $memNow  = $this->e((string)($data['data']['usage_mb'] ?? '-'));
+          }
+          if($data['key'] === 'kpi') {
+                $kpis = $data['html']??'';
+            }else {
+                $tabs[$data['key']] = ['title' => $data['icon'] . ' ' . $data['label'], 'html' => $data['html']];
+            }
+        
+        }
+        
         $tabsNav   = $this->tabsNav($tabs);
         $tabsPanel = $this->tabsPanels($tabs);
-        
 
         return <<<HTML
 <style>
-/* ======== Minimal Dark Theme (Vanilla CSS) ======== */
+/* ======== Theme Variables ======== */
 :root {
+  --mw-theme: 'dark';
+  
+  /* Dark Theme (Default) */
   --mw-bg: #0b1220;
   --mw-bg-2: #0f172a;
   --mw-card: #111827;
@@ -77,74 +64,546 @@ final class Renderer
   --mw-pill: #18243b;
   --mw-badge: #223253;
   --mw-shadow: 0 10px 30px rgba(0,0,0,.45);
+  --mw-btn-bg: var(--mw-card);
+  --mw-btn-hover: #1a2338;
 }
 
-#mwdbg-root { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483000; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; color: var(--mw-text); }
-#mwdbg-root * { box-sizing: border-box; }
-/*.mw-cloak { display: none !important; }*/
-.mw-cloak {
-  display: none !important;
+[data-theme="light"] {
+  --mw-bg: #f8fafc;
+  --mw-bg-2: #f1f5f9;
+  --mw-card: #ffffff;
+  --mw-border: #e2e8f0;
+  --mw-text: #1e293b;
+  --mw-text-dim: #64748b;
+  --mw-accent: #3b82f6;
+  --mw-pill: #e2e8f0;
+  --mw-badge: #f1f5f9;
+  --mw-shadow: 0 10px 30px rgba(0,0,0,.1);
+  --mw-btn-bg: #ffffff;
+  --mw-btn-hover: #f1f5f9;
 }
+
+/* ======== Base Styles ======== */
+#mwdbg-root { 
+  position: fixed; 
+  left: 0; 
+  right: 0; 
+  bottom: 0; 
+  z-index: 2147483000; 
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; 
+  color: var(--mw-text); 
+}
+#mwdbg-root * { box-sizing: border-box; }
+
+.mw-cloak { display: none !important; }
+
 /* Header bar */
-.mw-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--mw-bg-2); border-top: 1px solid var(--mw-border); box-shadow: var(--mw-shadow); }
-.mw-badge { font-size: 12px; background: var(--mw-pill); border: 1px solid var(--mw-border); border-radius: 9999px; padding: 2px 10px; color: var(--mw-text); }
-.mw-chip { font-size: 11px; background: var(--mw-pill); border: 1px solid var(--mw-border); border-radius: 6px; padding: 1px 8px; color: var(--mw-text); }
-.mw-btn { font-size: 12px; padding: 4px 10px; border-radius: 6px; background: var(--mw-card); color: var(--mw-text); border: 1px solid var(--mw-border); cursor: pointer; }
-.mw-btn:hover { background: #1a2338; }
+.mw-header { 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  padding: 8px 12px; 
+  background: var(--mw-bg-2); 
+  border-top: 1px solid var(--mw-border); 
+  box-shadow: var(--mw-shadow); 
+}
+
+.mw-badge { 
+  font-size: 12px; 
+  background: var(--mw-pill); 
+  border: 1px solid var(--mw-border); 
+  border-radius: 9999px; 
+  padding: 2px 10px; 
+  color: var(--mw-text); 
+}
+
+.mw-chip { 
+  font-size: 11px; 
+  background: var(--mw-pill); 
+  border: 1px solid var(--mw-border); 
+  border-radius: 6px; 
+  padding: 1px 8px; 
+  color: var(--mw-text); 
+}
+
+.mw-btn { 
+  font-size: 12px; 
+  padding: 4px 10px; 
+  border-radius: 6px; 
+  background: var(--mw-btn-bg); 
+  color: var(--mw-text); 
+  border: 1px solid var(--mw-border); 
+  cursor: pointer; 
+  transition: background-color 0.2s ease;
+}
+
+.mw-btn:hover { 
+  background: var(--mw-btn-hover); 
+}
+
+.mw-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.mw-theme-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
 
 /* Panel up (absolute, opens upward) */
-.mw-panel-wrap { position: absolute; left: 0; right: 0; bottom: 40px; padding: 0 8px 8px; }
-.mw-panel { background: var(--mw-bg); border: 1px solid var(--mw-border); border-radius: 12px; box-shadow: var(--mw-shadow); overflow: hidden; }
+.mw-panel-wrap { 
+  position: absolute; 
+  left: 0; 
+  right: 0; 
+  bottom: 40px; 
+  padding: 0 8px 8px; 
+}
+
+.mw-panel { 
+  background: var(--mw-bg); 
+  border: 1px solid var(--mw-border); 
+  border-radius: 12px; 
+  box-shadow: var(--mw-shadow); 
+  overflow: hidden; 
+}
 
 /* Panel collapse animation */
-.mw-collapse { overflow: clip; transition: max-height .25s ease, opacity .2s ease; opacity: 1; }
-.mw-collapse.closed { max-height: 0 !important; opacity: 0; }
-.mw-collapse.open { max-height: 80vh; }
+.mw-collapse { 
+  overflow: clip; 
+  transition: max-height .25s ease, opacity .2s ease; 
+  opacity: 1; 
+}
+
+.mw-collapse.closed { 
+  max-height: 0 !important; 
+  opacity: 0; 
+}
+
+.mw-collapse.open { 
+  max-height: 80vh; 
+}
 
 /* Grid */
-.mw-grid { display: grid; grid-template-columns: 180px 1fr; max-height: 60vh; }
-.mw-sidebar { background: var(--mw-bg-2); border-right: 1px solid var(--mw-border); overflow-y: auto; }
-.mw-content { background: var(--mw-bg); padding: 12px; overflow-y: auto; }
+.mw-grid { 
+  display: grid; 
+  grid-template-columns: 180px 1fr; 
+  max-height: 60vh; 
+}
+
+.mw-sidebar { 
+  background: var(--mw-bg-2); 
+  border-right: 1px solid var(--mw-border); 
+  overflow-y: auto; 
+}
+
+.mw-content { 
+  background: var(--mw-bg); 
+  padding: 12px; 
+  overflow-y: auto; 
+}
 
 /* Sidebar tabs */
-.mw-tab-btn { width: 100%; text-align: left; padding: 10px 12px; color: var(--mw-text); background: transparent; border: 0; border-bottom: 1px solid rgba(255,255,255,.05); cursor: pointer; }
-.mw-tab-btn:hover { background: rgba(255,255,255,.06); }
-.mw-tab-btn.active { background: #273149; }
+.mw-tab-btn { 
+  width: 100%; 
+  text-align: left; 
+  padding: 10px 12px; 
+  color: var(--mw-text); 
+  background: transparent; 
+  border: 0; 
+  border-bottom: 1px solid rgba(255,255,255,.05); 
+  cursor: pointer; 
+  transition: background-color 0.2s ease;
+}
+
+.mw-tab-btn:hover { 
+  background: rgba(255,255,255,.06); 
+}
+
+.mw-tab-btn.active { 
+  background: var(--mw-accent); 
+}
 
 /* KPI grid */
-.mw-kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; margin-bottom: 10px; }
-@media (max-width: 1024px) { .mw-kpi-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
-@media (max-width: 640px)  { .mw-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-.mw-kpi { display:flex; align-items:center; justify-content:space-between; background: var(--mw-card); border:1px solid var(--mw-border); border-radius: 8px; padding: 8px 10px; }
-.mw-kpi .k { color: var(--mw-text-dim); font-size: 12px; }
-.mw-kpi .v { color: var(--mw-text); font-weight: 600; font-size: 12px; }
+.mw-kpi-grid { 
+  display: grid; 
+  grid-template-columns: repeat(6, minmax(0,1fr)); 
+  gap: 8px; 
+  margin-bottom: 10px; 
+}
+
+@media (max-width: 1024px) { 
+  .mw-kpi-grid { 
+    grid-template-columns: repeat(3, minmax(0,1fr)); 
+  } 
+}
+
+@media (max-width: 640px)  { 
+  .mw-kpi-grid { 
+    grid-template-columns: repeat(2, minmax(0,1fr)); 
+  } 
+}
+
+.mw-kpi { 
+  display:flex; 
+  align-items:center; 
+  justify-content:space-between; 
+  background: var(--mw-card); 
+  border:1px solid var(--mw-border); 
+  border-radius: 8px; 
+  padding: 8px 10px; 
+}
+
+.mw-kpi .k { 
+  color: var(--mw-text-dim); 
+  font-size: 12px; 
+}
+
+.mw-kpi .v { 
+  color: var(--mw-text); 
+  font-weight: 600; 
+  font-size: 12px; 
+}
 
 /* Cards & sections */
-.mw-card { background: var(--mw-card); border: 1px solid var(--mw-border); border-radius: 10px; }
-.mw-card-h { padding: 8px 10px; border-bottom: 1px solid var(--mw-border); font-weight: 600; font-size: 14px; }
-.mw-card-b { padding: 10px; }
+.mw-card { 
+  background: var(--mw-card); 
+  border: 1px solid var(--mw-border); 
+  border-radius: 10px; 
+}
+
+.mw-card-h { 
+  padding: 8px 10px; 
+  border-bottom: 1px solid var(--mw-border); 
+  font-weight: 600; 
+  font-size: 14px; 
+}
+
+.mw-card-b { 
+  padding: 10px; 
+}
 
 /* Table */
-.mw-table { width: 100%; border: 1px solid var(--mw-border); border-radius: 8px; border-collapse: collapse; overflow: hidden; }
-.mw-table thead th { background: #101a30; color: var(--mw-text-dim); text-transform: uppercase; font-size: 12px; padding: 8px; border-bottom: 1px solid var(--mw-border); text-align: left; }
-.mw-table td { padding: 8px; border-bottom: 1px solid var(--mw-border); }
-.mw-table tr:last-child td { border-bottom: 0; }
-.mw-right { text-align: right; }
-.mw-pre { background: #0a0f1d; border:1px solid var(--mw-border); padding:8px; border-radius:8px; overflow:auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+.mw-table { 
+  width: 100%; 
+  border: 1px solid var(--mw-border); 
+  border-radius: 8px; 
+  border-collapse: collapse; 
+  overflow: hidden; 
+}
+
+.mw-table thead th { 
+  background: var(--mw-bg-2); 
+  color: var(--mw-text-dim); 
+  text-transform: uppercase; 
+  font-size: 12px; 
+  padding: 8px; 
+  border-bottom: 1px solid var(--mw-border); 
+  text-align: left; 
+}
+
+.mw-table td { 
+  padding: 8px; 
+  border-bottom: 1px solid var(--mw-border);
+  font-size:14px;
+  color: var(--mw-text);
+}
+
+.mw-table tr:last-child td { 
+  border-bottom: 0; 
+}
+
+.mw-right { 
+  text-align: right; 
+}
+
+.mw-pre { 
+  background: var(--mw-bg-2); 
+  border:1px solid var(--mw-border); 
+  padding:8px; 
+  border-radius:8px; 
+  overflow:auto; 
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; 
+  font-size: 12px; 
+}
 
 /* Utilities */
-.mw-badgel { display:inline-block; font-size: 11px; padding: 2px 8px; background: var(--mw-badge); border:1px solid var(--mw-border); border-radius: 9999px; }
-.mw-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; }
-.mw-grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.mw-grid-3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-@media (max-width: 900px) { .mw-grid-3 { grid-template-columns: 1fr; } .mw-grid { grid-template-columns: 150px 1fr; } }
-@media (max-width: 700px) { .mw-grid-2 { grid-template-columns: 1fr; } }
+.mw-badgel { 
+  display:inline-block; 
+  font-size: 11px; 
+  padding: 2px 8px; 
+  background: var(--mw-badge); 
+  border:1px solid var(--mw-border); 
+  border-radius: 9999px; 
+}
+
+.mw-mono { 
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; 
+  font-size: 12px; 
+}
+
+.mw-grid-2 { 
+  display:grid; 
+  grid-template-columns: 1fr 1fr; 
+  gap: 12px; 
+}
+
+.mw-grid-3 { 
+  display:grid; 
+  grid-template-columns: 1fr 1fr 1fr; 
+  gap: 12px; 
+}
+
+@media (max-width: 900px) { 
+  .mw-grid-3 { 
+    grid-template-columns: 1fr; 
+  } 
+  .mw-grid { 
+    grid-template-columns: 150px 1fr; 
+  } 
+}
+
+@media (max-width: 700px) { 
+  .mw-grid-2 { 
+    grid-template-columns: 1fr; 
+  } 
+}
 
 /* Cloak removal on init */
-#mwdbg-root.ready { display: initial !important; }
+#mwdbg-root.ready { 
+  display: initial !important; 
+}
+
+/* ======== Exception Collector Styles ======== */
+.db-exception-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--mw-text-dim);
+  font-style: italic;
+}
+
+.db-exception-header-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--mw-border);
+}
+
+.db-exception-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--mw-pill);
+  border: 1px solid var(--mw-border);
+  border-radius: 16px;
+  font-size: 12px;
+}
+
+.db-exception-pill-label {
+  color: var(--mw-text-dim);
+}
+
+.db-exception-pill-value {
+  color: var(--mw-text);
+  font-weight: 600;
+}
+
+.db-exception-card {
+  background: var(--mw-card);
+  border: 1px solid var(--mw-border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.db-exception-header {
+  padding: 12px 16px;
+  background: linear-gradient(90deg, rgba(239,68,68,0.15) 0%, transparent 100%);
+  border-bottom: 1px solid var(--mw-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.db-exception-badge {
+  background: #dc2626;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.db-exception-title {
+  color: var(--mw-text);
+  font-weight: 600;
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.db-exception-meta {
+  color: var(--mw-text-dim);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.db-exception-body {
+  padding: 16px;
+}
+
+.db-exception-details {
+  margin-bottom: 12px;
+}
+
+.db-exception-summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  background: var(--mw-bg-2);
+  border: 1px solid var(--mw-border);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mw-text);
+  list-style: none;
+  transition: background-color 0.2s ease;
+}
+
+.db-exception-summary:hover {
+  background: var(--mw-accent);
+}
+
+.db-exception-summary::-webkit-details-marker {
+  display: none;
+}
+
+.db-exception-summary::before {
+  content: '▼';
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.db-exception-details[open] .db-exception-summary::before {
+  transform: rotate(180deg);
+}
+
+.db-exception-trace {
+  background: var(--mw-bg-2);
+  border: 1px solid var(--mw-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--mw-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.db-exception-chain {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--mw-border);
+}
+
+.db-exception-chain b {
+  color: var(--mw-text);
+  font-size: 13px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.db-exception-chain-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style: none;
+}
+
+.db-exception-chain-item {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: var(--mw-bg-2);
+  border: 1px solid var(--mw-border);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.db-exception-chain-type {
+  color: #dc2626;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.db-exception-chain-message {
+  color: var(--mw-text);
+}
+
+.db-exception-chain-location {
+  color: var(--mw-text-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Animation for new exceptions */
+.db-exception-card {
+  animation: db-exception-appear 0.3s ease-out;
+}
+
+@keyframes db-exception-appear {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .db-exception-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  
+  .db-exception-title {
+    font-size: 13px;
+  }
+  
+  .db-exception-meta {
+    font-size: 11px;
+  }
+  
+  .db-exception-trace {
+    font-size: 11px;
+    padding: 8px;
+  }
+  
+  .db-exception-chain-item {
+    font-size: 11px;
+  }
+}
 </style>
 
-<div id="mwdbg-root" class="mw-cloak">
+<div id="mwdbg-root" class="mw-cloak" data-theme="dark">
   <!-- Header -->
   <div class="mw-header">
     <div style="display:flex;align-items:center;gap:8px">
@@ -152,6 +611,13 @@ final class Renderer
       <span class="mw-chip">Elapsed: <b style="margin-left:6px">{$elapsed} ms</b></span>
       <span class="mw-chip">Mem: <b style="margin-left:6px">{$memNow} MB</b></span>
       <span class="mw-chip">PHP: <b style="margin-left:6px">{$phpVer}</b></span>
+      <div class="mw-theme-toggle">
+        <button id="mw-theme-toggle" class="mw-btn" type="button" title="Toggle theme">
+          <svg class="mw-theme-icon" viewBox="0 0 24 24" width="16" height="16">
+            <path d="M12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-10c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0-6c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0 12c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <button id="mw-btn-toggle" class="mw-btn" type="button" aria-expanded="false">Open</button>
   </div>
@@ -183,25 +649,47 @@ final class Renderer
 (function(){
   const root      = document.getElementById('mwdbg-root');
   const btnToggle = document.getElementById('mw-btn-toggle');
+  const themeToggle = document.getElementById('mw-theme-toggle');
   const collapse  = document.getElementById('mw-collapse');
   const tabsWrap  = document.getElementById('mw-tabs');
   const panels    = document.getElementById('mw-panels');
 
-  if(!root || !btnToggle || !collapse || !tabsWrap || !panels) return;
+  if(!root || !btnToggle || !themeToggle || !collapse || !tabsWrap || !panels) return;
 
   // State (restore)
   const KEY = 'mwDebugBar';
-  let state = { open: false, active: 'timeline' };
-  //btnToggle.addEventListener("click",()=> console.log('button Clicked'));
+  let state = { 
+    open: false, 
+    active: 'timeline', 
+    theme: 'dark' 
+  };
 
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (typeof saved.open === 'boolean') state.open = saved.open;
     if (typeof saved.active === 'string' && saved.active) state.active = saved.active;
+    if (typeof saved.theme === 'string' && saved.theme) state.theme = saved.theme;
   } catch(e) {}
 
+  // Theme functions
+  function setTheme(theme) {
+    state.theme = theme;
+    root.setAttribute('data-theme', theme);
+    persist();
+  }
+
+  function toggleTheme() {
+    const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+  }
+
   // Init UI
-  function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+  function persist(){ 
+    try{ 
+      localStorage.setItem(KEY, JSON.stringify(state)); 
+    } catch(e){} 
+  }
+  
   function setOpen(open){
     state.open = open;
     collapse.classList.toggle('open', open);
@@ -211,6 +699,7 @@ final class Renderer
     btnToggle.setAttribute('aria-expanded', String(open));
     persist();
   }
+  
   function switchTab(key){
     state.active = key;
     // sidebar
@@ -231,9 +720,9 @@ final class Renderer
     persist();
   }
 
-  // Build dynamic height (optional: we keep CSS max-height; JS not required)
+  // Event listeners
   btnToggle.addEventListener('click', ()=> setOpen(!state.open));
- 
+  themeToggle.addEventListener('click', toggleTheme);
 
   // Sidebar tab click + keyboard
   tabsWrap.addEventListener('click', (e)=>{
@@ -241,6 +730,7 @@ final class Renderer
     if(!btn) return;
     switchTab(btn.getAttribute('data-key'));
   });
+  
   tabsWrap.addEventListener('keydown', (e)=>{
     const tabs = Array.from(tabsWrap.querySelectorAll('[role="tab"]'));
     if(!tabs.length) return;
@@ -257,259 +747,13 @@ final class Renderer
     tabs[next].focus();
   });
 
-  // Ready
+  // Initialize
   setOpen(state.open);
   switchTab(state.active);
+  setTheme(state.theme);
   root.classList.add('ready');
 })();
 </script>
 HTML;
-
-
-    }
-
-    /* ========================= Sections ========================= */
-
-    private function renderVarDumper(array $p): string
-    {
-        $dumps = $p['dumps'] ?? [];
-        if (empty($dumps)) {
-            return '<div class="mw-text-dim">No dumps collected</div>';
-        }
-
-        $html = '';
-        foreach ($dumps as $i => $dump) {
-            $title = htmlspecialchars($dump['name'] ?? 'Dump #'.($i + 1));
-            $time = isset($dump['time']) ? round($dump['time'] * 1000, 2).' ms' : '';
-            
-            $html .= <<<HTML
-    <div class="mw-card" style="margin-bottom: 15px;">
-        <div class="mw-card-h">{$title} <small style="color: #999;">{$time}</small></div>
-        <div class="mw-card-b">{$dump['html']}</div>
-    </div>
-    HTML;
-        }
-
-        return $html;
-    }
-
-    private function renderTimeline(array $p): string
-    {
-        $spans = $p['timeline_spans'] ?? null;
-        $marks = $p['timeline'] ?? null;
-
-        if (is_array($spans) && $spans) {
-            $total = 0.0;
-            foreach ($spans as $s) {
-                $end = (float)($s['start_ms'] ?? 0) + (float)($s['duration_ms'] ?? 0);
-                if ($end > $total) $total = $end;
-            }
-            
-            $summary = $this->timelineSummary(count($spans), $total);
-
-            $rows = '';
-            foreach ($spans as $s) {
-                $rows .= $this->tr([
-                    $this->e((string)($s['label'] ?? '')),
-                    $this->num((float)($s['start_ms'] ?? 0)).' ms',
-                    $this->num((float)($s['duration_ms'] ?? 0)).' ms',
-                    $this->e((string)($s['depth'] ?? 0)),
-                ], [null,'right','right','right']);
-            }
-
-            return $summary . $this->table(['Label','Start','Duration','Depth'], $rows, ['left','right','right','right']);
-        }
-
-        if (is_array($marks) && $marks) {
-            
-            //$summary = $this->timelineSummary(count($marks), null);
-            $rows = '';
-            $total=0;
-            foreach ($marks as $m) {
-                $rows .= $this->tr([
-                    $this->e((string)($m['label'] ?? '')),
-                    $this->num((float)($m['t'] ?? 0), 5).' s',
-                    //$this->formatMillisecondsToDateTime($m['t'])
-                ], [null,'right']);
-                
-            }
-            $first = reset($marks); // Moves pointer to the first element and returns it
-            $last = end($marks);
-            $total = $last['t']-$first['t'];
-            $summary = $this->timelineSummary(count($marks), $total);
-            return $summary . $this->table(['Label','Time'], $rows, ['left','right']);
-        }
-
-        return '<div style="color:#9ca3af">No timeline data.</div>';
-    }
-
-    private function timelineSummary(int $count, ?float $totalMs): string
-    {
-        $total = $totalMs !== null ? $this->num($totalMs).' ms' : '-';
-        return <<<HTML
-<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-  <span class="mw-chip">Spans: <b style="margin-left:6px">{$this->e((string)$count)}</b></span>
-  <span class="mw-chip">Total: <b style="margin-left:6px">{$total}</b></span>
-</div>
-HTML;
-    }
-
-    private function renderLogs(array $p): string
-    {
-        $logs = $p['logs'] ?? [];
-        if (!$logs) return '<div style="color:#9ca3af">No logs.</div>';
-
-        $rows = '';
-        foreach ($logs as $l) {
-            $rows .= $this->tr([
-                $this->num((float)($l['time'] ?? 0)).' ms',
-                '<span class="mw-badgel">'.$this->e((string)($l['level'] ?? '')).'</span>',
-                $this->e((string)($l['message'] ?? '')),
-                '<span class="mw-mono">'. $this->e(json_encode($l['context'] ?? [], JSON_UNESCAPED_SLASHES)) .'</span>',
-            ], ['right',null,null,null]);
-        }
-
-        return $this->table(['Time','Level','Message','Context'], $rows, ['right',null,null,null]);
-    }
-
-    private function renderQueries(array $p): string
-    {
-        $qs = $p['queries'] ?? [];
-        if (!$qs) return '<div style="color:#9ca3af">No queries.</div>';
-
-        $rows = '';
-        foreach ($qs as $q) {
-            $rows .= $this->tr([
-                '<span class="mw-mono">'.$this->e((string)($q['sql'] ?? '')).'</span>',
-                '<span class="mw-mono">'. $this->e(json_encode($q['params'] ?? [], JSON_UNESCAPED_SLASHES)) .'</span>',
-                $this->num((float)($q['duration_ms'] ?? 0)).' ms',
-                $this->e((string)($q['connection'] ?? '')),
-            ], [null,null,'right',null]);
-        }
-
-        return $this->table(['SQL','Params','Duration','Conn'], $rows, [null,null,'right',null]);
-    }
-
-    private function renderMemory(array $p): string
-    {
-        $m = $p['memory'] ?? [];
-        $cards = [
-            $this->stat('Usage', $this->num((float)($m['usage_mb'] ?? 0)).' MB'),
-            $this->stat('Peak',  $this->num((float)($m['peak_usage_mb'] ?? 0)).' MB'),
-            $this->stat('Limit', '<span class="mw-mono">'.$this->e((string)($m['limit'] ?? '')).'</span>'),
-        ];
-        return '<div class="mw-grid-3">'.implode('', $cards).'</div>';
-    }
-
-    private function renderPhp(array $p): string
-    {
-        $php = $p['php'] ?? [];
-        $exts = '';
-        foreach ((array)($php['extensions'] ?? []) as $ex) {
-            $exts .= '<span class="mw-badgel" style="margin: 0 6px 6px 0; display:inline-block">'.$this->e((string)$ex).'</span>';
-        }
-        return <<<HTML
-<div class="mw-grid-3" style="margin-bottom:12px">
-  {$this->stat('Version', $this->e((string)($php['version'] ?? '')))}
-  {$this->stat('Opcache', !empty($php['opcache_enabled']) ? 'Yes' : 'No')}
-</div>
-<div>
-  <div style="font-size:12px;color:#9ca3af;margin-bottom:6px">Extensions</div>
-  <div>{$exts}</div>
-</div>
-HTML;
-    }
-
-    private function renderRequest(array $p): string
-    {
-        $content = $this->renderRequestTable($p);
-        return '<div style="max-height:45vh; overflow:auto">'.$content.'</div>';
-    }
-
-    private function renderRequestTable(array $p): string
-    {
-        $r = $p['request'] ?? [];
-        $rows = [
-            ['Method', $this->e((string)($r['method'] ?? ''))],
-            ['URI',    '<span class="mw-mono">'.$this->e((string)($r['uri'] ?? '')).'</span>'],
-            ['IP',     $this->e((string)($r['ip'] ?? ''))],
-            ['User Agent', '<span class="mw-mono">'.$this->e((string)($r['ua'] ?? '')).'</span>'],
-            ['Headers', $this->preJson($r['headers'] ?? [])],
-            ['GET',     $this->preJson($r['get'] ?? [])],
-            ['POST',    $this->preJson($r['post'] ?? [])],
-            ['Cookies', $this->preJson($r['cookies'] ?? [])],
-            ['Files',   $this->preJson($r['files'] ?? [])],
-            ['Server',  $this->preJson($r['server'] ?? [])],
-        ];
-
-        $trs = '';
-        foreach ($rows as [$k,$v]) {
-            $trs .= '<tr><th style="width:120px;color:#9ca3af;text-align:left;padding:8px;border-bottom:1px solid var(--mw-border)">'.$this->e($k).'</th><td style="padding:8px;border-bottom:1px solid var(--mw-border)">'.$v.'</td></tr>';
-        }
-        return '<table class="mw-table" style="border:0"><tbody>'.$trs.'</tbody></table>';
-    }
-
-    private function renderSession(array $p): string
-    {
-        $s = $p['session'] ?? [];
-        if (!$s) return '<div style="color:#9ca3af">No session data.</div>';
-
-        $meta = '<div class="mw-grid-3" style="margin-bottom:10px">'
-              . $this->stat('Session ID',  '<span class="mw-mono">'.$this->e((string)($s['id'] ?? '')).'</span>')
-              . $this->stat('Session Name','<span class="mw-mono">'.$this->e((string)($s['name'] ?? '')).'</span>')
-              . $this->stat('Attrs Count', $this->e((string)count((array)($s['attributes'] ?? []))))
-              . '</div>';
-
-        $grid = '<div class="mw-grid-2" style="max-height:45vh; overflow:auto">'
-              . $this->card('Attributes', $this->preJson($s['attributes'] ?? []))
-              . $this->card('Flashes',    $this->preJson($s['flashes'] ?? []))
-              . $this->card('Meta',       $this->preJson($s['meta'] ?? []))
-              . '</div>';
-
-        return $meta . $grid;
-    }
-
-    private function renderEnvServer(array $p): string
-    {
-        $env    = (array)($p['php']['env'] ?? $p['env'] ?? []);
-        $server = (array)($p['request']['server'] ?? []);
-        if (!$env && !$server) return '<div style="color:#9ca3af">No environment/server data.</div>';
-
-        return '<div class="mw-grid-2" style="max-height:45vh; overflow:auto">'
-             . $this->card('Environment Variables', $this->preJson($env))
-             . $this->card('Server Parameters',     $this->preJson($server))
-             . '</div>';
-    }
-
-    private function renderHistory(array $p): string
-    {
-        $meta = $p['_history_meta'] ?? [];
-        if (!$meta) return '<div style="color:#9ca3af">No history stored.</div>';
-
-        $rows = '';
-        foreach ($meta as $i => $m) {
-            $rows .= $this->tr([
-                (string)($i+1),
-                '<span class="mw-mono">'.$this->e((string)($m['id'] ?? '')).'</span>',
-                $this->e((string)($m['ts'] ?? '')),
-                isset($m['elapsed_ms']) ? $this->num((float)$m['elapsed_ms']).' ms' : '',
-                (string)($m['size'] ?? ''),
-            ], ['right',null,null,'right','right']);
-        }
-        $table = $this->table(['#','ID','Timestamp','Elapsed','Size (B)'], $rows, ['right',null,null,'right','right']);
-        return '<div style="max-height:45vh; overflow:auto">'.$table.'</div>';
-    }
-
-    /* ========================= UI helpers ========================= */
- 
-   private function formatMillisecondsToDateTime($milliseconds) :string {
-       // Convert milliseconds to seconds
-        $seconds = $milliseconds / 1000;
-
-        // Create a DateTime object from the Unix timestamp (seconds)
-        $dateTime = new \DateTime("@" . floor($seconds));
-
-        // Format the DateTime object
-        return $dateTime->format('H:i:s');
     }
 }

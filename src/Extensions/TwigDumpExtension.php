@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Marwa\DebugBar\Twig;
+namespace Marwa\DebugBar\Extensions;
 
 use Marwa\DebugBar\DebugBar;
 use Symfony\Component\VarDumper\VarDumper;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
 
-final class DebugBarDumpExtension extends AbstractExtension
+final class TwigDumpExtension extends AbstractExtension
 {
     public function __construct(private readonly DebugBar $debugBar) {}
 

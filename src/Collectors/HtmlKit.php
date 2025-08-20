@@ -1,9 +1,18 @@
-<?php  declare(strict_types=1);
+<?php
+declare(strict_types=1);
 
 namespace Marwa\DebugBar\Collectors;
 
-trait CollectorsTrait{
-    
+/**
+ * HtmlKit
+ *
+ * Shared HTML helpers for collectors so each collector can stay tiny and consistent.
+ * Use inside any collector: `use HtmlKit;`
+ */
+trait HtmlKit
+{
+  
+    /* ========================= UI helpers ========================= */
      private function tabsNav(array $tabs): string
     {
         $out = '';
@@ -70,14 +79,6 @@ HTML;
         return '<div class="mw-card"><div class="mw-card-h">'.$this->e($label).'</div><div class="mw-card-b">'.$value.'</div></div>';
     }
 
-    private function kpiRow(array $pairs): string
-    {
-        $out = '';
-        foreach ($pairs as [$label, $value]) {
-            $out .= '<div class="mw-kpi"><span class="k">'.$this->e($label).'</span><span class="v">'.$this->e((string)$value).'</span></div>';
-        }
-        return $out;
-    }
 
     private function preJson(array $a): string
     {
@@ -91,13 +92,23 @@ HTML;
         return number_format($n, $dec, '.', '');
     }
 
-    private function e(?string $s): string
+    private function e(mixed $s): string
     {
-        return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8');
+        return htmlspecialchars((string)$s ?? '', ENT_QUOTES, 'UTF-8');
     }
 
     private function jsKey(string $s): string
     {
         return preg_replace('/[^a-zA-Z0-9_\-]/', '_', $s) ?: 'tab';
+    }
+   private function formatMillisecondsToDateTime($milliseconds) :string {
+       // Convert milliseconds to seconds
+        $seconds = $milliseconds / 1000;
+
+        // Create a DateTime object from the Unix timestamp (seconds)
+        $dateTime = new \DateTime("@" . floor($seconds));
+
+        // Format the DateTime object
+        return $dateTime->format('H:i:s');
     }
 }
