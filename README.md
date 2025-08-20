@@ -1,8 +1,8 @@
 # Marwa DebugBar
 
-[![Latest Version](https://img.shields.io/packagist/v/marwa/debugbar.svg)](https://packagist.org/packages/marwa/debugbar)
-[![PHP Version](https://img.shields.io/packagist/php-v/marwa/debugbar)](https://php.net)
-[![License](https://img.shields.io/packagist/l/marwa/debugbar)](LICENSE)
+[![Latest Version](https://img.shields.io/packagist/v/memran/marwa-debugbar.svg)](https://packagist.org/packages/memran/marwa-debugbar)
+[![PHP Version](https://img.shields.io/packagist/php-v/memran/marwa-debugbar)](https://php.net)
+[![License](https://img.shields.io/packagist/l/memran/marwa-debugbar)](LICENSE)
 
 A **framework-agnostic**, lightweight, floating **Debug Bar** for PHP 8.1+.  
 Built for clarity, speed, and extensibility with **lazy collectors**.
