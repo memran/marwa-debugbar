@@ -89,7 +89,7 @@ final class Renderer
         </div>
 
         <!-- Content area -->
-        <div class="bg-gray-900 p-3 overflow-y-auto">
+        <div class="bg-gray-900 p-3 h-fit overflow-y-auto">
           <!-- KPI grid -->
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
             {$kpis}
@@ -269,7 +269,7 @@ HTML;
     foreach ($rows as [$k, $v]) {
       $trs .= '<tr class="border-b border-gray-800"><th class="py-1.5 pr-3 text-left text-gray-300 w-28 align-top">' . $this->e($k) . '</th><td class="py-1.5">' . $v . '</td></tr>';
     }
-    return '<table class="min-w-full text-left"><tbody class="text-sm">' . $trs . '</tbody></table>';
+    return '<table class="min-w-full text-left"><tbody class="text-sm h-fit">' . $trs . '</tbody></table>';
   }
 
   private function renderHistory(array $p): string
