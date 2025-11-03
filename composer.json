@@ -1,38 +1,69 @@
 {
-  "name": "memran/marwa-debugbar",
-  "description": "Lightweight floating footer Debug Bar for PHP apps with plugins, VarDumper, history, and profiling.",
-  "license": "MIT",
-  "type": "library",
-  "require": {
-    "php": ">=8.1",
-    "psr/log": "^3.0",
-    "psr/http-message": "^2.0",
-    "psr/http-server-middleware": "^1.0",
-    "psr/http-server-handler": "^1.0",
-    "symfony/var-dumper": "^7.1"
-  },
-  "require-dev": {
-    "phpunit/phpunit": "^11.0",
-    "phpstan/phpstan": "^1.11",
-    "friendsofphp/php-cs-fixer": "^3.57",
-    "twig/twig": "^3.8"
-  },
-  "autoload": {
-    "psr-4": {
-      "Marwa\\DebugBar\\": "src/"
+    "name": "memran/marwa-debugbar",
+    "description": "A lightweight, framework-agnostic PHP debug bar with profiling capabilities",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["debug", "profiler", "debugbar", "debugging", "performance"],
+    "authors": [
+        {
+            "name": "Mohammad Emran",
+            "email": "memran.dhk@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^7.4 || ^8.0",
+        "ext-json": "*",
+        "memran/marwa-support": "^1.0"
     },
-    "files": ["src/Helpers.php"]
-  },
-  "autoload-dev": {
-    "psr-4": {
-      "Tests\\": "tests/"
+    "require-dev": {
+        "memran/marwa-logger": "^1.0",
+        "mockery/mockery": "^1.4",
+        "phpstan/phpstan": "^1.4",
+        "phpunit/phpunit": "^9.5",
+        "squizlabs/php_codesniffer": "^3.6",
+        "symfony/var-dumper": "^5.3"
+    },
+    "suggest": {
+        "symfony/var-dumper": "For enhanced variable dumping capabilities",
+        "psr/log": "To integrate with PSR-3 compatible loggers",
+        "monolog/monolog": "For advanced logging integration"
+    },
+    "autoload": {
+        "psr-4": {
+            "Marwa\\DebugBar\\": "src/"
+        },
+        "files": ["src/Helpers.php"]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Marwa\\DebugBar\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": [
+            "phpunit",
+            "composer run lint",
+            "composer run analyze"
+        ],
+        "lint": "phpcs",
+        "lint-fix": "phpcbf",
+        "analyze": "phpstan analyze",
+        "post-install-cmd": [
+            "@composer dump-autoload -o"
+        ],
+        "post-update-cmd": [
+            "@composer dump-autoload -o"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "extra": {
+        "branch-alias": {
+            "dev-main": "1.0.x-dev"
+        }
     }
-  },
-  "scripts": {
-    "test": "phpunit",
-    "stan": "phpstan analyse",
-    "fix": "php-cs-fixer fix --verbose",
-    "check-style": "php-cs-fixer fix --dry-run --diff",
-    "ci": "composer check-style && composer stan && composer test"
-  }
 }
