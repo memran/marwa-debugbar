@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Marwa\DebugBar;
@@ -7,47 +8,45 @@ use Marwa\DebugBar\Collectors\HtmlKit;
 
 final class Renderer
 {
-    use HtmlKit;
-    public function __construct(private DebugBar $debugBar) {}
+  use HtmlKit;
+  public function __construct(private DebugBar $debugBar) {}
 
-    public function render(): string
-    {
-        if (!$this->debugBar->isEnabled()) return '';
+  public function render(): string
+  {
+    if (!$this->debugBar->isEnabled()) return '';
 
-        $metaData=['_meta' => [
-                'generated_at' => date('c'),
-                'elapsed_ms'   => round((microtime(true) - $this->debugBar->start) * 1000, 2),
-                'php_sapi'     => PHP_SAPI
-            ]];
-        $state = $this->debugBar->state();
-        $rows  = $this->debugBar->collectors()->renderAll($state);
+    $metaData = ['_meta' => [
+      'generated_at' => date('c'),
+      'elapsed_ms'   => round((microtime(true) - $this->debugBar->start) * 1000, 2),
+      'php_sapi'     => PHP_SAPI
+    ]];
+    $state = $this->debugBar->state();
+    $rows  = $this->debugBar->collectors()->renderAll($state);
 
-        if (!$rows || !is_array($rows)) {
-            return '<div style="padding:10px;color:red">DebugBar: No payload data</div>';
-        }
-        
-        // Header pills
-        $elapsed = $this->e((string)($metaData['_meta']['elapsed_ms'] ?? '-'));
-        $phpVer  = $this->e((string)($rows['php']['version'] ?? PHP_VERSION));
-        
-        $tabs = [];
-        foreach($rows as $data) {
-          if($data['key']==='memory')
-          {
-              $memNow  = $this->e((string)($data['data']['usage_mb'] ?? '-'));
-          }
-          if($data['key'] === 'kpi') {
-                $kpis = $data['html']??'';
-            }else {
-                $tabs[$data['key']] = ['title' => $data['icon'] . ' ' . $data['label'], 'html' => $data['html']];
-            }
-        
-        }
-        
-        $tabsNav   = $this->tabsNav($tabs);
-        $tabsPanel = $this->tabsPanels($tabs);
+    if (!$rows || !is_array($rows)) {
+      return '<div style="padding:10px;color:red">DebugBar: No payload data</div>';
+    }
 
-        return <<<HTML
+    // Header pills
+    $elapsed = $this->e((string)($metaData['_meta']['elapsed_ms'] ?? '-'));
+    $phpVer  = $this->e((string)($rows['php']['version'] ?? PHP_VERSION));
+
+    $tabs = [];
+    foreach ($rows as $data) {
+      if ($data['key'] === 'memory') {
+        $memNow  = $this->e((string)($data['data']['usage_mb'] ?? '-'));
+      }
+      if ($data['key'] === 'kpi') {
+        $kpis = $data['html'] ?? '';
+      } else {
+        $tabs[$data['key']] = ['title' => $data['icon'] . ' ' . $data['label'], 'html' => $data['html']];
+      }
+    }
+
+    $tabsNav   = $this->tabsNav($tabs);
+    $tabsPanel = $this->tabsPanels($tabs);
+
+    return <<<HTML
 <style>
 /* ======== Theme Variables ======== */
 :root {
@@ -622,29 +621,6 @@ final class Renderer
     <button id="mw-btn-toggle" class="mw-btn" type="button" aria-expanded="false">Open</button>
   </div>
 
-<<<<<<< HEAD
-  <!-- Upward-opening panel: absolutely positioned ABOVE the header -->
-  <div class="absolute left-0 right-0 bottom-[40px] sm:bottom-[40px]" 
-       x-show="open" 
-       x-collapse.duration.250ms 
-       x-transition.opacity 
-       x-cloak>
-    <div class="mx-2 sm:mx-4 mb-3 bg-gray-900 text-gray-100 border border-gray-800 rounded-xl shadow-2xl overflow-hidden">
-
-      <!-- Body with max height and internal scroll; grows UPWARDS because it's anchored to bottom -->
-      <div class="grid grid-cols-[180px_1fr] max-h-[60vh]">
-
-        <!-- Sidebar tabs -->
-        <div class="bg-gray-800 border-r border-gray-700 overflow-y-auto">
-          {$tabsList}
-        </div>
-
-        <!-- Content area -->
-        <div class="bg-gray-900 p-3 h-fit overflow-y-auto">
-          <!-- KPI grid -->
-          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
-            {$kpis}
-=======
   <!-- Panel above header -->
   <div class="mw-panel-wrap">
     <div id="mw-collapse" class="mw-panel mw-collapse closed" aria-hidden="true">
@@ -660,7 +636,6 @@ final class Renderer
           <!-- Panels -->
           <div id="mw-panels">
             {$tabsPanel}
->>>>>>> 728ac7ee24e650259c673e8d13d163a6c2b0b007
           </div>
         </section>
       </div>
@@ -779,239 +754,5 @@ final class Renderer
 })();
 </script>
 HTML;
-    }
-<<<<<<< HEAD
-
-    if (is_array($marks) && $marks) {
-      $summary = $this->timelineSummary(count($marks), null);
-      $rows = '';
-      foreach ($marks as $m) {
-        $rows .= $this->tr([
-          $this->e((string)($m['label'] ?? '')),
-          $this->num((float)($m['t'] ?? 0), 5) . ' s',
-        ], [null, 'right']);
-      }
-      return $summary . $this->table(['Label', 'Seconds'], $rows, ['left', 'right']);
-    }
-
-    return '<div class="text-gray-400">No timeline data.</div>';
-  }
-
-  private function timelineSummary(int $count, ?float $totalMs): string
-  {
-    $total = $totalMs !== null ? $this->num($totalMs) . ' ms' : '-';
-    return <<<HTML
-<div class="flex flex-wrap items-center gap-2 mb-2">
-  <span class="text-[11px] bg-gray-800 border border-gray-700 rounded px-2 py-0.5">Spans: <b class="ml-1">{$this->e((string)$count)}</b></span>
-  <span class="text-[11px] bg-gray-800 border border-gray-700 rounded px-2 py-0.5">Total: <b class="ml-1">{$total}</b></span>
-</div>
-HTML;
-  }
-
-  private function renderLogs(array $p): string
-  {
-    $logs = $p['logs'] ?? [];
-    if (!$logs) return '<div class="text-gray-400">No logs.</div>';
-
-    $rows = '';
-    foreach ($logs as $l) {
-      $rows .= $this->tr([
-        $this->num((float)($l['time'] ?? 0)) . ' ms',
-        '<span class="text-[11px] px-2 py-0.5 rounded bg-gray-800 border border-gray-700">' . $this->e((string)($l['level'] ?? '')) . '</span>',
-        $this->e((string)($l['message'] ?? '')),
-        '<code class="text-[12px]">' . $this->e(json_encode($l['context'] ?? [], JSON_UNESCAPED_SLASHES)) . '</code>',
-      ], ['right', null, null, null]);
-    }
-
-    return $this->table(['Time', 'Level', 'Message', 'Context'], $rows, ['right', null, null, null]);
-  }
-
-  private function renderQueries(array $p): string
-  {
-    $qs = $p['queries'] ?? [];
-    if (!$qs) return '<div class="text-gray-400">No queries.</div>';
-
-    $rows = '';
-    foreach ($qs as $q) {
-      $rows .= $this->tr([
-        '<code class="text-[12px]">' . $this->e((string)($q['sql'] ?? '')) . '</code>',
-        '<code class="text-[12px]">' . $this->e(json_encode($q['params'] ?? [], JSON_UNESCAPED_SLASHES)) . '</code>',
-        $this->num((float)($q['duration_ms'] ?? 0)) . ' ms',
-        $this->e((string)($q['connection'] ?? '')),
-      ], [null, null, 'right', null]);
-    }
-
-    return $this->table(['SQL', 'Params', 'Duration', 'Conn'], $rows, [null, null, 'right', null]);
-  }
-
-  private function renderMemory(array $p): string
-  {
-    $m = $p['memory'] ?? [];
-    $cards = [
-      $this->stat('Usage', $this->num((float)($m['usage_mb'] ?? 0)) . ' MB'),
-      $this->stat('Peak',  $this->num((float)($m['peak_usage_mb'] ?? 0)) . ' MB'),
-      $this->stat('Limit', '<code class="text-[12px]">' . $this->e((string)($m['limit'] ?? '')) . '</code>'),
-    ];
-    return '<div class="grid grid-cols-1 md:grid-cols-3 gap-2">' . implode('', $cards) . '</div>';
-  }
-
-  private function renderPhp(array $p): string
-  {
-    $php = $p['php'] ?? [];
-    $exts = '';
-    foreach ((array)($php['extensions'] ?? []) as $ex) {
-      $exts .= '<span class="text-[11px] px-2 py-0.5 mr-1 mb-1 rounded bg-gray-800 border border-gray-700 inline-block">' . $this->e((string)$ex) . '</span>';
-    }
-    return <<<HTML
-<div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
-  {$this->stat('Version',$this->e((string)($php['version'] ?? '')))}
-  {$this->stat('Opcache', !empty($php['opcache_enabled']) ? 'Yes' : 'No')}
-</div>
-<div>
-  <div class="text-xs text-gray-400 mb-1">Extensions</div>
-  <div>{$exts}</div>
-</div>
-HTML;
-  }
-
-  private function renderRequest(array $p): string
-  {
-    $r = $p['request'] ?? [];
-    $rows = [
-      ['Method', $this->e((string)($r['method'] ?? ''))],
-      ['URI',    '<code class="text-[12px]">' . $this->e((string)($r['uri'] ?? '')) . '</code>'],
-      ['IP',     $this->e((string)($r['ip'] ?? ''))],
-      ['User Agent', '<code class="text-[12px]">' . $this->e((string)($r['ua'] ?? '')) . '</code>'],
-      ['Headers', $this->preJson($r['headers'] ?? [])],
-      ['GET',     $this->preJson($r['get'] ?? [])],
-      ['POST',    $this->preJson($r['post'] ?? [])],
-      ['Cookies', $this->preJson($r['cookies'] ?? [])],
-      ['Files',   $this->preJson($r['files'] ?? [])],
-    ];
-
-    $trs = '';
-    foreach ($rows as [$k, $v]) {
-      $trs .= '<tr class="border-b border-gray-800"><th class="py-1.5 pr-3 text-left text-gray-300 w-28 align-top">' . $this->e($k) . '</th><td class="py-1.5">' . $v . '</td></tr>';
-    }
-    return '<table class="min-w-full text-left"><tbody class="text-sm h-fit">' . $trs . '</tbody></table>';
-  }
-
-  private function renderHistory(array $p): string
-  {
-    $meta = $p['_history_meta'] ?? [];
-    if (!$meta) return '<div class="text-gray-400">No history stored.</div>';
-
-    $rows = '';
-    foreach ($meta as $i => $m) {
-      $rows .= $this->tr([
-        (string)($i + 1),
-        '<code class="text-[12px]">' . $this->e((string)($m['id'] ?? '')) . '</code>',
-        $this->e((string)($m['ts'] ?? '')),
-        isset($m['elapsed_ms']) ? $this->num((float)$m['elapsed_ms']) . ' ms' : '',
-        (string)($m['size'] ?? ''),
-      ], ['right', null, null, 'right', 'right']);
-    }
-    return $this->table(['#', 'ID', 'Timestamp', 'Elapsed', 'Size (B)'], $rows, ['right', null, null, 'right', 'right']);
-  }
-
-  /* ========================= UI helpers ========================= */
-
-  private function tabsList(array $tabs): string
-  {
-    $out = '';
-    foreach ($tabs as $key => $def) {
-      $label = $this->e($def['title']);
-      $k = $this->jsKey($key);
-      $out .= <<<HTML
-<button @click="set('{$k}')"
-        :class="is('{$k}') ? 'bg-gray-700 text-white' : 'text-gray-200 hover:bg-gray-700/60'"
-        class="w-full text-left px-3 py-2 border-b border-gray-700/70">
-  {$label}
-</button>
-HTML;
-    }
-    return $out;
-  }
-
-  private function tabsViews(array $tabs): string
-  {
-    $out = '';
-    foreach ($tabs as $key => $def) {
-      $k = $this->jsKey($key);
-      $out .= <<<HTML
-<div x-show="is('{$k}')" x-transition.opacity.duration.120ms x-cloak>
-  {$def['html']}
-</div>
-HTML;
-    }
-    return $out;
-  }
-
-  private function table(array $headers, string $rowsHtml, array $align): string
-  {
-    $ths = '';
-    foreach ($headers as $i => $h) {
-      $alignCls = ($align[$i] ?? null) === 'right' ? ' text-right' : ' text-left';
-      $ths .= '<th class="py-1.5 px-2 text-xs font-medium uppercase text-gray-400' . $alignCls . '">' . $this->e($h) . '</th>';
-    }
-    return <<<HTML
-<table class="min-w-full text-sm border border-gray-800 rounded overflow-hidden">
-  <thead class="bg-gray-800/70 border-b border-gray-800">
-    <tr>{$ths}</tr>
-  </thead>
-  <tbody class="divide-y divide-gray-800">{$rowsHtml}</tbody>
-</table>
-HTML;
-  }
-
-  private function tr(array $cells, array $align): string
-  {
-    $tds = '';
-    foreach ($cells as $i => $c) {
-      $a = ($align[$i] ?? null) === 'right' ? 'text-right' : 'text-left';
-      $tds .= '<td class="py-1.5 px-2 ' . $a . '">' . $c . '</td>';
-    }
-    return '<tr>' . $tds . '</tr>';
-  }
-
-  private function stat(string $label, string $value): string
-  {
-    return '<div class="bg-gray-800/70 border border-gray-700 rounded px-3 py-2"><div class="text-xs text-gray-400">' . $this->e($label) . '</div><div class="font-semibold">' . $value . '</div></div>';
-  }
-
-  private function kpiRow(array $pairs): string
-  {
-    $out = '';
-    foreach ($pairs as [$label, $value]) {
-      $out .= '<div class="flex items-center justify-between bg-gray-800/70 border border-gray-700 rounded px-3 py-2">'
-        . '<span class="text-xs text-gray-300">' . $this->e($label) . '</span>'
-        . '<span class="text-xs font-semibold">' . $this->e((string)$value) . '</span>'
-        . '</div>';
-    }
-    return $out;
-  }
-
-  private function preJson(array $a): string
-  {
-    $j = $this->e(json_encode($a, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-    return '<pre class="bg-gray-950 p-2 rounded border border-gray-800 overflow-auto text-[12px]">' . $j . '</pre>';
-  }
-
-  private function num(float $n, int $dec = 2): string
-  {
-    return number_format($n, $dec, '.', '');
-  }
-
-  private function e(?string $s): string
-  {
-    return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8');
-  }
-
-  private function jsKey(string $s): string
-  {
-    return preg_replace('/[^a-zA-Z0-9_\-]/', '_', $s) ?: 'tab';
   }
 }
-=======
-}
->>>>>>> 728ac7ee24e650259c673e8d13d163a6c2b0b007
