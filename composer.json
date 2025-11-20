@@ -19,7 +19,7 @@
   "require": {
     "php": "^7.4 || ^8.0",
     "ext-json": "*",
-    "memran/marwa-support": "^1.0",
+    "memran/marwa-support": "dev-main",
     "symfony/var-dumper": "^5.3"
   },
   "require-dev": {
