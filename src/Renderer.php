@@ -622,7 +622,6 @@ final class Renderer
     <button id="mw-btn-toggle" class="mw-btn" type="button" aria-expanded="false">Open</button>
   </div>
 
-<<<<<<< HEAD
   <!-- Upward-opening panel: absolutely positioned ABOVE the header -->
   <div class="absolute left-0 right-0 bottom-[40px] sm:bottom-[40px]" 
        x-show="open" 
@@ -644,23 +643,6 @@ final class Renderer
           <!-- KPI grid -->
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
             {$kpis}
-=======
-  <!-- Panel above header -->
-  <div class="mw-panel-wrap">
-    <div id="mw-collapse" class="mw-panel mw-collapse closed" aria-hidden="true">
-      <div class="mw-grid">
-        <!-- Sidebar -->
-        <nav id="mw-tabs" class="mw-sidebar" role="tablist" aria-label="DebugBar tabs">
-          {$tabsNav}
-        </nav>
-        <!-- Content -->
-        <section class="mw-content">
-          <!-- KPIs -->
-          <div class="mw-kpi-grid">{$kpis}</div>
-          <!-- Panels -->
-          <div id="mw-panels">
-            {$tabsPanel}
->>>>>>> 728ac7ee24e650259c673e8d13d163a6c2b0b007
           </div>
         </section>
       </div>
