@@ -762,7 +762,6 @@ final class Renderer
 </script>
 HTML;
     }
-<<<<<<< HEAD
 
     if (is_array($marks) && $marks) {
       $summary = $this->timelineSummary(count($marks), null);
@@ -994,6 +993,4 @@ HTML;
     return preg_replace('/[^a-zA-Z0-9_\-]/', '_', $s) ?: 'tab';
   }
 }
-=======
 }
->>>>>>> 728ac7ee24e650259c673e8d13d163a6c2b0b007
