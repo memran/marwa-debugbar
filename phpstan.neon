@@ -4,3 +4,8 @@ parameters:
     - src
     - tests
   checkMissingIterableValueType: true
+  excludePaths:
+    analyse:
+      - src/Extensions/TwigDumpExtension.php
+  parallel:
+    maximumNumberOfProcesses: 1

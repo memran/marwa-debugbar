@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Marwa\DebugBar;
@@ -7,131 +8,164 @@ use Marwa\DebugBar\Contracts\Collector;
 use Marwa\DebugBar\Contracts\CollectorException;
 use Marwa\DebugBar\Core\DebugState;
 use ReflectionClass;
+use Throwable;
 
-/**
- * Registers collectors lazily (by class name) and orchestrates:
- *  - metadata reading without instantiation
- *  - on-demand instantiate -> collect -> renderHtml
- */
 final class CollectorManager
 {
-    /** @var array<string,class-string<Collector>> key => FQCN */
+    /** @var array<string,class-string<Collector>> */
     private array $classes = [];
 
     /** @var array<string,bool> */
     private array $enabled = [];
 
-    /** Register a collector by class name (lazy instantiation). */
+    /**
+     * @param class-string<Collector> $collectorClass
+     */
     public function register(string $collectorClass, bool $enabled = true): void
     {
         if (!is_subclass_of($collectorClass, Collector::class)) {
-            throw new CollectorException("$collectorClass must implement Collector");
+            throw new CollectorException(sprintf('%s must implement %s', $collectorClass, Collector::class));
         }
-        /** @var class-string<Collector> $collectorClass */
+
         $key = $collectorClass::key();
         if (isset($this->classes[$key])) {
-            throw new CollectorException("Collector key '{$key}' already registered by {$this->classes[$key]}");
+            throw new CollectorException(sprintf(
+                "Collector key '%s' is already registered by %s",
+                $key,
+                $this->classes[$key]
+            ));
         }
+
         $this->classes[$key] = $collectorClass;
         $this->enabled[$key] = $enabled;
     }
 
-    /** Enable/disable by key. */
     public function setEnabled(string $key, bool $enabled): void
     {
         if (!isset($this->classes[$key])) {
-            throw new CollectorException("Collector '{$key}' not found");
+            throw new CollectorException(sprintf("Collector '%s' not found", $key));
         }
+
         $this->enabled[$key] = $enabled;
     }
 
-    /**
-     * Automatically discover collectors in a PSR-4 directory.
-     * This loads PHP files to make classes known to Reflection.
-     */
-    public function autoDiscover(string $dir, string $baseNamespace): int
+    public function autoDiscover(string $directory, string $baseNamespace): int
     {
         $count = 0;
-        $dir = rtrim($dir, DIRECTORY_SEPARATOR);
-        if (!is_dir($dir)) return 0;
+        $directory = rtrim($directory, DIRECTORY_SEPARATOR);
+        if (!is_dir($directory)) {
+            return 0;
+        }
 
-        $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir));
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
+
         /** @var \SplFileInfo $file */
-        foreach ($rii as $file) {
-            if (!$file->isFile() || $file->getExtension() !== 'php') continue;
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
 
             $path = $file->getRealPath();
-            if (!$path) continue;
-            require_once $path; // load class
-
-            // Derive FQCN (baseNamespace + relative path without .php)
-            $rel = ltrim(str_replace([$dir, DIRECTORY_SEPARATOR], ['', '\\'], $path), '\\');
-            $rel = preg_replace('/\.php$/', '', $rel);
-            $class = rtrim($baseNamespace, '\\') . '\\' . $rel;
-
-            if (!class_exists($class)) continue;
-
-            $ref = new ReflectionClass($class);
-            if ($ref->isInstantiable() && $ref->implementsInterface(Collector::class)) {
-                $this->register($class);
-                $count++;
+            if ($path === false) {
+                continue;
             }
+
+            require_once $path;
+
+            $relative = ltrim(str_replace([$directory, DIRECTORY_SEPARATOR], ['', '\\'], $path), '\\');
+            $relative = (string) preg_replace('/\.php$/', '', $relative);
+            $class = rtrim($baseNamespace, '\\') . '\\' . $relative;
+
+            if (!class_exists($class)) {
+                continue;
+            }
+
+            $reflection = new ReflectionClass($class);
+            if (!$reflection->isInstantiable() || !$reflection->implementsInterface(Collector::class)) {
+                continue;
+            }
+
+            if (isset($this->classes[$class::key()])) {
+                continue;
+            }
+
+            /** @var class-string<Collector> $class */
+            $this->register($class);
+            $count++;
         }
+
         return $count;
     }
 
     /**
-     * Render every enabled collector:
-     * - instantiate
-     * - collect($state)
-     * - renderHtml($data)
-     *
-     * @return array<int,array{key:string,label:string,icon:string,order:int,html:string}>
+     * @return list<array{key:string,label:string,icon:string,order:int,html:string,data:array<string,mixed>}>
      */
     public function renderAll(DebugState $state): array
     {
         $rows = [];
-        
-        foreach ($this->classes as $key => $class) {
-            if (!($this->enabled[$key] ?? false)) continue;
 
-            // metadata without instantiation
+        foreach ($this->classes as $key => $class) {
+            if (!($this->enabled[$key] ?? false)) {
+                continue;
+            }
+
             $label = $class::label();
-            $icon  = $class::icon();
+            $icon = $class::icon();
             $order = $class::order();
 
-            // instantiate lazily
-            /** @var Collector $instance */
-            $instance = new $class();
+            try {
+                $instance = new $class();
+                $data = $instance->collect($state);
+                $html = $instance->renderHtml($data);
+            } catch (Throwable $exception) {
+                $data = [
+                    'exception' => $exception::class,
+                    'message' => $exception->getMessage(),
+                ];
+                $html = sprintf(
+                    '<div class="mw-card"><div class="mw-card-h">%s failed</div><div class="mw-card-b"><pre class="mw-pre">%s</pre></div></div>',
+                    htmlspecialchars($label, ENT_QUOTES, 'UTF-8'),
+                    htmlspecialchars($exception::class . ': ' . $exception->getMessage(), ENT_QUOTES, 'UTF-8')
+                );
+            }
 
-            // collect + render
-            $data = $instance->collect($state);
-            $html = $instance->renderHtml($data);
-
-            $rows[$key] = compact('key', 'label', 'icon', 'order', 'html','data');
+            $rows[] = [
+                'key' => $key,
+                'label' => $label,
+                'icon' => $icon,
+                'order' => $order,
+                'html' => $html,
+                'data' => $data,
+            ];
         }
 
-        usort($rows, fn($a,$b) => $a['order'] <=> $b['order']);
+        usort($rows, static fn(array $left, array $right): int => $left['order'] <=> $right['order']);
+
         return $rows;
     }
 
     /**
-     * For building sidebars without instantiating collectors.
-     * @return array<int,array{key:string,label:string,icon:string,order:int}>
+     * @return list<array{key:string,label:string,icon:string,order:int}>
      */
     public function metadata(): array
     {
-        $meta = [];
+        $metadata = [];
+
         foreach ($this->classes as $key => $class) {
-            if (!($this->enabled[$key] ?? false)) continue;
-            $meta[] = [
-                'key'   => $key,
+            if (!($this->enabled[$key] ?? false)) {
+                continue;
+            }
+
+            $metadata[] = [
+                'key' => $key,
                 'label' => $class::label(),
-                'icon'  => $class::icon(),
+                'icon' => $class::icon(),
                 'order' => $class::order(),
             ];
         }
-        usort($meta, fn($a,$b) => $a['order'] <=> $b['order']);
-        return $meta;
+
+        usort($metadata, static fn(array $left, array $right): int => $left['order'] <=> $right['order']);
+
+        return $metadata;
     }
 }

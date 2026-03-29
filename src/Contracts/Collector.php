@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Marwa\DebugBar\Contracts;
@@ -27,12 +28,16 @@ interface Collector
     /**
      * Collects data. Should be side-effect free and fast.
      * Receive a lightweight DebugState (no coupling to DebugBar internals).
+     *
+     * @return array<string, mixed>
      */
     public function collect(DebugState $state): array;
 
     /**
      * Returns the HTML for this tab, given the data collected above.
      * Keep the returned string self-contained (no global CSS/JS assumptions).
+     *
+     * @param array<string, mixed> $data
      */
     public function renderHtml(array $data): string;
 }

@@ -1,6 +1,9 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Marwa\DebugBar\Contracts;
 
-final class CollectorException extends \RuntimeException {}
+final class CollectorException extends \RuntimeException
+{
+}

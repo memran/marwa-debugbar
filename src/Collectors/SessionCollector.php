@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Marwa\DebugBar\Collectors;
@@ -9,51 +10,124 @@ use Marwa\DebugBar\Core\DebugState;
 final class SessionCollector implements Collector
 {
     use HtmlKit;
-    public static function key(): string   { return 'session'; }
-    public static function label(): string { return 'Session'; }
-    public static function icon(): string  { return '🔑'; }
-    public static function order(): int    { return 300; }
+
+    private const SENSITIVE_KEYS = ['password', 'passwd', 'token', 'secret', 'csrf', 'key'];
+
+    public static function key(): string
+    {
+        return 'session';
+    }
+
+    public static function label(): string
+    {
+        return 'Session';
+    }
+
+    public static function icon(): string
+    {
+        return '🔑';
+    }
+
+    public static function order(): int
+    {
+        return 300;
+    }
 
     public function collect(DebugState $state): array
     {
-        if (session_status() !== \PHP_SESSION_ACTIVE) {
+        unset($state);
+
+        if (session_status() !== PHP_SESSION_ACTIVE) {
             return ['active' => false, 'meta' => [], 'data' => []];
         }
+
+        $cookie = session_get_cookie_params();
+        $sessionId = session_id();
+
         return [
             'active' => true,
-            'meta'   => [
-                'id'          => \session_id(),
-                'name'        => \session_name(),
-                'save_path'   => \session_save_path(),
-                'cookie'      => \session_get_cookie_params(),
+            'meta' => [
+                'id' => $this->maskValue($sessionId === false ? '' : $sessionId),
+                'name' => session_name(),
+                'cookie' => [
+                    'lifetime' => $cookie['lifetime'],
+                    'path' => $cookie['path'],
+                    'secure' => $cookie['secure'],
+                    'httponly' => $cookie['httponly'],
+                    'samesite' => $cookie['samesite'],
+                ],
             ],
-            'data'   => $_SESSION ?? [],
+            'data' => $this->redactArray($_SESSION),
         ];
     }
 
     public function renderHtml(array $data): string
     {
-        $content= $this->renderSession($data);
-        return '<div style="max-height:45vh; overflow:auto">'.$content.'</div>';
+        if (!($data['active'] ?? false)) {
+            return '<div style="color:#9ca3af">Session is not active.</div>';
+        }
+
+        $meta = '<div class="mw-grid-3" style="margin-bottom:10px">'
+            . $this->stat('Session ID', '<span class="mw-mono">' . $this->e((string) ($data['meta']['id'] ?? '')) . '</span>')
+            . $this->stat('Session Name', '<span class="mw-mono">' . $this->e((string) ($data['meta']['name'] ?? '')) . '</span>')
+            . $this->stat('Attrs Count', $this->e((string) count((array) ($data['data'] ?? []))))
+            . '</div>';
+
+        $body = '<div class="mw-grid-2">'
+            . $this->card('Attributes', $this->preJson($data['data'] ?? []))
+            . $this->card('Cookie Meta', $this->preJson($data['meta']['cookie'] ?? []))
+            . '</div>';
+
+        return '<div style="max-height:45vh;overflow:auto">' . $meta . $body . '</div>';
     }
 
-     private function renderSession(array $s): string
+    /**
+     * @param array<string,mixed> $values
+     * @return array<string,mixed>
+     */
+    private function redactArray(array $values): array
     {
-       
-        if (!$s['active']) return '<div style="color:#9ca3af">Session is not Active.</div>';
+        $sanitized = [];
 
-        $meta = '<div class="mw-grid-3" style="margin-bottom:10px;">'
-              . $this->stat('Session ID',  '<span class="mw-mono">'.$this->e((string)($s['meta']['id'] ?? '')).'</span>')
-              . $this->stat('Session Name','<span class="mw-mono">'.$this->e((string)($s['meta']['name'] ?? '')).'</span>')
-              . $this->stat('Attrs Count', $this->e((string)count((array)($s['data'] ?? []))))
-              . '</div>';
+        foreach ($values as $key => $value) {
+            if ($this->isSensitiveKey((string) $key)) {
+                $sanitized[$key] = '[redacted]';
+                continue;
+            }
 
-        $grid = '<div class="mw-grid-2" style="max-height:45vh;">'
-              . $this->card('Attributes', $this->preJson($s['data'] ?? []))
-              . $this->card('Flashes',    $this->preJson($s['data']['flashes'] ?? []))
-              . $this->card('Meta',       $this->preJson($s['meta'] ?? []))
-              . '</div>';
+            if (is_array($value)) {
+                $sanitized[$key] = $this->redactArray($value);
+                continue;
+            }
 
-        return $meta . $grid;
+            $sanitized[$key] = $value;
+        }
+
+        return $sanitized;
+    }
+
+    private function isSensitiveKey(string $key): bool
+    {
+        $normalized = strtolower($key);
+        foreach (self::SENSITIVE_KEYS as $needle) {
+            if (str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function maskValue(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        if (strlen($value) <= 6) {
+            return str_repeat('*', strlen($value));
+        }
+
+        return str_repeat('*', strlen($value) - 4) . substr($value, -4);
     }
 }
