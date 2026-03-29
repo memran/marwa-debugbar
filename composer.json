@@ -11,9 +11,10 @@
         }
     ],
     "require": {
-        "php": "^7.4 || ^8.0",
+        "php": "^8.1",
         "ext-json": "*",
-        "memran/marwa-support": "^1.0"
+        "memran/marwa-support": "^1.0",
+        "psr/log": "^1.1 || ^2.0 || ^3.0"
     },
     "require-dev": {
         "memran/marwa-logger": "^1.0",
@@ -26,7 +27,8 @@
     "suggest": {
         "symfony/var-dumper": "For enhanced variable dumping capabilities",
         "psr/log": "To integrate with PSR-3 compatible loggers",
-        "monolog/monolog": "For advanced logging integration"
+        "monolog/monolog": "For advanced logging integration",
+        "twig/twig": "To use the optional Twig dump extension"
     },
     "autoload": {
         "psr-4": {
@@ -40,14 +42,17 @@
         }
     },
     "scripts": {
-        "test": [
-            "phpunit",
-            "composer run lint",
-            "composer run analyze"
+        "test": "phpunit",
+        "test:coverage": "phpunit --coverage-text",
+        "analyse": "phpstan analyse --no-progress --debug --memory-limit=1G",
+        "analyze": "@analyse",
+        "lint": "phpcs -n",
+        "fix": "phpcbf",
+        "ci": [
+            "@lint",
+            "@test",
+            "@analyse"
         ],
-        "lint": "phpcs",
-        "lint-fix": "phpcbf",
-        "analyze": "phpstan analyze",
         "post-install-cmd": [
             "@composer dump-autoload -o"
         ],
@@ -59,7 +64,6 @@
         "sort-packages": true,
         "optimize-autoloader": true
     },
-    "minimum-stability": "dev",
     "prefer-stable": true,
     "extra": {
         "branch-alias": {

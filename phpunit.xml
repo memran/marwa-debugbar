@@ -3,6 +3,12 @@
   <testsuites>
     <testsuite name="Unit">
       <directory>tests</directory>
-    </testsuites>
+    </testsuite>
   </testsuites>
+
+  <coverage>
+    <include>
+      <directory suffix=".php">src</directory>
+    </include>
+  </coverage>
 </phpunit>

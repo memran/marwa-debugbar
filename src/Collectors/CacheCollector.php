@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Marwa\DebugBar\Collectors;
 
 use Marwa\DebugBar\Contracts\Collector;
@@ -24,12 +26,20 @@ final class CacheCollector implements Collector
         return 350;
     }
 
+    /**
+     * @return array{driver:string,hits:int,misses:int}
+     */
     public function collect(DebugState $state): array
     {
+        unset($state);
+
         // pull from your own in-memory metrics or global logs
         return ['driver' => 'array', 'hits' => 10, 'misses' => 2];
     }
 
+    /**
+     * @param array{driver:string,hits:int,misses:int} $d
+     */
     public function renderHtml(array $d): string
     {
         $esc = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
