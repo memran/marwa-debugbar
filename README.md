@@ -1,5 +1,12 @@
 # Marwa DebugBar
 
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/memran/marwa-debugbar.svg)](https://packagist.org/packages/memran/marwa-debugbar)
+[![Total Downloads](https://img.shields.io/packagist/dt/memran/marwa-debugbar.svg)](https://packagist.org/packages/memran/marwa-debugbar)
+[![PHP Version](https://img.shields.io/badge/PHP-8.1%2B-777bb4.svg?logo=php&logoColor=white)](https://packagist.org/packages/memran/marwa-debugbar)
+[![CI Workflow](https://img.shields.io/github/actions/workflow/status/memran/marwa-debugbar/ci.yml?branch=main&label=CI)](https://github.com/memran/marwa-debugbar/actions/workflows/ci.yml)
+[![PHPStan Level](https://img.shields.io/badge/PHPStan-level%208-31c653.svg)](https://phpstan.org/)
+[![PHPUnit](https://img.shields.io/badge/PHPUnit-tested-0d5c63.svg?logo=phpunit&logoColor=white)](https://phpunit.de/)
+
 A lightweight, framework-agnostic debug bar for PHP applications. It collects request timing, logs, queries, dumps, session data, and runtime diagnostics without requiring a framework.
 
 ## Requirements
