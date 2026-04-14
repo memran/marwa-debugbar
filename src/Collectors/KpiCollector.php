@@ -6,6 +6,7 @@ namespace Marwa\DebugBar\Collectors;
 
 use Marwa\DebugBar\Contracts\Collector;
 use Marwa\DebugBar\Core\DebugState;
+use Marwa\DebugBar\Core\RuntimeMetrics;
 
 final class KpiCollector implements Collector
 {
@@ -33,7 +34,6 @@ final class KpiCollector implements Collector
 
     public function collect(DebugState $state): array
     {
-        $endTimestamp = $this->lastMarkTimestamp($state) ?? microtime(true);
         $sqlTimeMs = 0.0;
 
         foreach ($state->queries as $query) {
@@ -44,15 +44,15 @@ final class KpiCollector implements Collector
         $route = $server['REQUEST_URI'] ?? ($server['argv'][0] ?? 'CLI');
 
         return [
-            'duration_ms' => round(($endTimestamp - $state->requestStart) * 1000, 2),
+            'duration_ms' => RuntimeMetrics::requestDurationMs($state),
             'sql_count' => count($state->queries),
             'sql_time_ms' => round($sqlTimeMs, 2),
             'logs_count' => count($state->logs),
             'dumps_count' => count($state->dumps),
-            'memory_peak_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
+            'memory_peak_mb' => RuntimeMetrics::memoryPeakMb(),
             'route' => $route,
             'status' => http_response_code() ?: 200,
-            'response_bytes' => $this->detectResponseSize(),
+            'response_bytes' => RuntimeMetrics::responseBytes(),
         ];
     }
 
@@ -75,32 +75,6 @@ final class KpiCollector implements Collector
         }
 
         return $html;
-    }
-
-    private function lastMarkTimestamp(DebugState $state): ?float
-    {
-        if ($state->marks === []) {
-            return null;
-        }
-
-        $marks = $state->marks;
-        $last = end($marks);
-
-        return $last['t'];
-    }
-
-    private function detectResponseSize(): int
-    {
-        if (ob_get_level() === 0) {
-            return 0;
-        }
-
-        $length = 0;
-        foreach (ob_get_status(true) as $buffer) {
-            $length += (int) ($buffer['buffer_used'] ?? 0);
-        }
-
-        return $length;
     }
 
     private function humanBytes(int $bytes): string

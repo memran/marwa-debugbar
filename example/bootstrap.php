@@ -10,6 +10,7 @@ $bar = debugbar();
 $bar->enable();
 
 $bar->collectors()->register(\Marwa\DebugBar\Collectors\KpiCollector::class);
+$bar->collectors()->register(\Marwa\DebugBar\Collectors\AlertCollector::class);
 $bar->collectors()->register(\Marwa\DebugBar\Collectors\TimelineCollector::class);
 $bar->collectors()->register(\Marwa\DebugBar\Collectors\VarDumperCollector::class);
 $bar->collectors()->register(\Marwa\DebugBar\Collectors\LogCollector::class);

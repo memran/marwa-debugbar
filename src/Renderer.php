@@ -307,6 +307,21 @@ final class Renderer
   border-radius: 9999px;
 }
 
+.mw-sev-warning {
+  background: rgba(245, 158, 11, .2);
+  border-color: rgba(245, 158, 11, .45);
+  color: #fde68a;
+}
+
+.mw-sev-critical {
+  background: rgba(239, 68, 68, .2);
+  border-color: rgba(239, 68, 68, .5);
+  color: #fecaca;
+}
+
+.mw-muted {
+  color: var(--mw-text-dim);
+}
 .mw-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
